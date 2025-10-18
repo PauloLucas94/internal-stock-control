@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Package, Plus, List, ArrowLeft, Save, Search, RefreshCw } from 'lucide-react';
+import { Package, Plus, List, ArrowLeft, Save, Search, RefreshCw, LogOut, LogIn } from 'lucide-react';
 
 // ⚠️ IMPORTANTE: Substitua pelas suas credenciais do Supabase
-const SUPABASE_URL = 'https://qfdidmicyoqvemvalpal.supabase.co'; // Ex: https://abc123.supabase.co
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFmZGlkbWljeW9xdmVtdmFscGFsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA3NjU1NTYsImV4cCI6MjA3NjM0MTU1Nn0._FMyikNhxm7KDGUe7i4JBnx7dSQ9jaiYIp2bJuZdtBQ'; // A chave anon/public
+const SUPABASE_URL = 'https://qfdidmicyoqvemvalpal.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFmZGlkbWljeW9xdmVtdmFscGFsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA3NjU1NTYsImV4cCI6MjA3NjM0MTU1Nn0._FMyikNhxm7KDGUe7i4JBnx7dSQ9jaiYIp2bJuZdtBQ';
 
 const App = () => {
   const [currentScreen, setCurrentScreen] = useState('home');
@@ -11,6 +11,14 @@ const App = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  
+  // Auth state
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authMode, setAuthMode] = useState('login'); // 'login' ou 'signup'
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [authError, setAuthError] = useState('');
   
   const [formData, setFormData] = useState({
     tipoItem: '',
@@ -22,11 +30,14 @@ const App = () => {
     movimentacao: ''
   });
 
+  // Função para fazer requisições autenticadas ao Supabase
   const supabaseFetch = async (endpoint, options = {}) => {
     const url = `${SUPABASE_URL}/rest/v1/${endpoint}`;
+    const token = user?.access_token || SUPABASE_ANON_KEY;
+    
     const headers = {
       'apikey': SUPABASE_ANON_KEY,
-      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
       'Prefer': 'return=representation',
       ...options.headers
@@ -45,6 +56,112 @@ const App = () => {
     return response.json();
   };
 
+  // Função de autenticação
+  const supabaseAuth = async (endpoint, body) => {
+    const url = `${SUPABASE_URL}/auth/v1/${endpoint}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body)
+    });
+
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.error_description || data.msg || 'Erro na autenticação');
+    }
+    
+    return data;
+  };
+
+  // Verificar sessão ao carregar
+  useEffect(() => {
+    const checkSession = () => {
+      const session = localStorage.getItem('supabase_session');
+      if (session) {
+        try {
+          const userData = JSON.parse(session);
+          setUser(userData);
+        } catch (e) {
+          localStorage.removeItem('supabase_session');
+        }
+      }
+      setAuthLoading(false);
+    };
+    
+    checkSession();
+  }, []);
+
+  // Carregar itens quando usuário estiver logado
+  useEffect(() => {
+    if (user) {
+      loadItems();
+    }
+  }, [user]);
+
+  // Login
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setAuthError('');
+    setLoading(true);
+
+    try {
+      const data = await supabaseAuth('token?grant_type=password', {
+        email,
+        password
+      });
+
+      const userData = {
+        access_token: data.access_token,
+        email: data.user.email,
+        id: data.user.id
+      };
+
+      localStorage.setItem('supabase_session', JSON.stringify(userData));
+      setUser(userData);
+      setEmail('');
+      setPassword('');
+    } catch (err) {
+      setAuthError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Cadastro
+  const handleSignup = async (e) => {
+    e.preventDefault();
+    setAuthError('');
+    setLoading(true);
+
+    try {
+      await supabaseAuth('signup', {
+        email,
+        password
+      });
+
+      setAuthError('');
+      alert('✅ Cadastro realizado! Faça login agora.');
+      setAuthMode('login');
+      setPassword('');
+    } catch (err) {
+      setAuthError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Logout
+  const handleLogout = () => {
+    localStorage.removeItem('supabase_session');
+    setUser(null);
+    setItems([]);
+    setCurrentScreen('home');
+  };
+
   const loadItems = async () => {
     try {
       setLoading(true);
@@ -59,12 +176,6 @@ const App = () => {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    if (SUPABASE_URL !== 'SUA_URL_AQUI' && SUPABASE_ANON_KEY !== 'SUA_CHAVE_AQUI') {
-      loadItems();
-    }
-  }, []);
 
   const resetForm = () => {
     setFormData({
@@ -143,6 +254,7 @@ const App = () => {
 
   const isConfigured = SUPABASE_URL !== 'SUA_URL_AQUI' && SUPABASE_ANON_KEY !== 'SUA_CHAVE_AQUI';
 
+  // Tela de configuração
   if (!isConfigured) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 flex items-center justify-center">
@@ -161,18 +273,139 @@ const App = () => {
     );
   }
 
+  // Loading inicial
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <RefreshCw className="w-12 h-12 text-indigo-600 animate-spin" />
+      </div>
+    );
+  }
+
+  // Tela de Login/Cadastro
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 flex items-center justify-center">
+        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
+          <div className="text-center mb-6">
+            <Package className="w-16 h-16 mx-auto mb-3 text-indigo-600" />
+            <h1 className="text-2xl font-bold text-gray-800">Controle de Estoque</h1>
+            <p className="text-gray-600 text-sm mt-1">Gestão Interna</p>
+          </div>
+
+          <div className="flex gap-2 mb-6">
+            <button
+              onClick={() => {
+                setAuthMode('login');
+                setAuthError('');
+              }}
+              className={`flex-1 py-2 rounded-lg font-semibold transition ${
+                authMode === 'login'
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              Login
+            </button>
+            <button
+              onClick={() => {
+                setAuthMode('signup');
+                setAuthError('');
+              }}
+              className={`flex-1 py-2 rounded-lg font-semibold transition ${
+                authMode === 'signup'
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              Cadastrar
+            </button>
+          </div>
+
+          <form onSubmit={authMode === 'login' ? handleLogin : handleSignup} className="space-y-4">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Email
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="seu@email.com"
+                required
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Senha
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                minLength={6}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              />
+              {authMode === 'signup' && (
+                <p className="text-xs text-gray-500 mt-1">Mínimo 6 caracteres</p>
+              )}
+            </div>
+
+            {authError && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm">
+                {authError}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg p-3 font-semibold flex items-center justify-center gap-2 transition disabled:opacity-50"
+            >
+              {loading ? (
+                <>
+                  <RefreshCw className="w-5 h-5 animate-spin" />
+                  {authMode === 'login' ? 'Entrando...' : 'Cadastrando...'}
+                </>
+              ) : (
+                <>
+                  <LogIn className="w-5 h-5" />
+                  {authMode === 'login' ? 'Entrar' : 'Criar Conta'}
+                </>
+              )}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  // HOME SCREEN (usuário logado)
   if (currentScreen === 'home') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
         <div className="max-w-md mx-auto">
-          <div className="bg-white rounded-lg shadow-lg p-6 mb-6 text-center">
-            <Package className="w-16 h-16 mx-auto mb-3 text-indigo-600" />
-            <h1 className="text-2xl font-bold text-gray-800">Controle de Estoque</h1>
-            <p className="text-gray-600 text-sm mt-1">Gestão Interna</p>
-            <div className="mt-3 flex items-center justify-center gap-2 text-xs text-gray-500">
-              <div className="w-2 h-2 rounded-full bg-green-500"></div>
-              Conectado ao Supabase
+          <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <div className="text-center">
+              <Package className="w-16 h-16 mx-auto mb-3 text-indigo-600" />
+              <h1 className="text-2xl font-bold text-gray-800">Controle de Estoque</h1>
+              <p className="text-gray-600 text-sm mt-1">Gestão Interna</p>
+              <div className="mt-3 flex items-center justify-center gap-2 text-xs text-gray-500">
+                <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                {user.email}
+              </div>
             </div>
+            <button
+              onClick={handleLogout}
+              className="mt-4 w-full bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg p-2 flex items-center justify-center gap-2 text-sm transition"
+            >
+              <LogOut className="w-4 h-4" />
+              Sair
+            </button>
           </div>
 
           {error && (
@@ -220,6 +453,7 @@ const App = () => {
     );
   }
 
+  // CADASTRO SCREEN
   if (currentScreen === 'cadastro') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
@@ -365,6 +599,7 @@ const App = () => {
     );
   }
 
+  // VISUALIZAR SCREEN
   if (currentScreen === 'visualizar') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
