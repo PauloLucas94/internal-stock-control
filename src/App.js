@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Package, Plus, List, ArrowLeft, Save, Search, RefreshCw, LogOut, LogIn } from 'lucide-react';
 
-// ⚠️ IMPORTANTE: Substitua pelas suas credenciais do Supabase
-const SUPABASE_URL = 'https://qfdidmicyoqvemvalpal.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFmZGlkbWljeW9xdmVtdmFscGFsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA3NjU1NTYsImV4cCI6MjA3NjM0MTU1Nn0._FMyikNhxm7KDGUe7i4JBnx7dSQ9jaiYIp2bJuZdtBQ';
+const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY;
 
 const App = () => {
   const [currentScreen, setCurrentScreen] = useState('home');
